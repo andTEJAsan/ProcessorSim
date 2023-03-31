@@ -6,7 +6,7 @@
 
 #ifndef __MIPS_PROCESSOR_HPP__
 #define __MIPS_PROCESSOR_HPP__
-
+using namespace std;
 #include <unordered_map>
 #include <string>
 #include <functional>
@@ -43,17 +43,48 @@ MEM/WB 	1. WB.CONTROL
 	3. MEM_READ
 	4. RD
 */
-struct PipelineReg
+
+struct MIPS_Architecture
 {
-	int at_instruction;
-	int PC_new;
-	bool mem_ctr;
-	bool zero_ctr;
-	bool ALUctr;
+	struct WBctr{
+		bool RegWrite;
+		bool MemtoReg;
+	};
+	
+	struct MEMctr{
+		bool branch;
+		bool MemRead;
+		bool MemWrite;
+		bool jump;
+	};
+	struct EXctr{
+		bool RegDst;
+		int OP; // 0 denotes add , 1 denotes subtraction
+		bool ALUSrc ; // true if alu src has to be immediate field
+	};
+	typedef struct WBctr WBctr;
+	typedef struct MEMctr MEMctr;
+	typedef struct EXctr EXctr;
+	struct PipelineReg
+{
+	std::vector<string> currcomand;
+	int at_PC = -1;
+	int PC_new = -1;
+/*control signals */
+	WBctr* WB = NULL;
+	MEMctr* MEM = NULL;
+	EXctr* EX = NULL;
+/*saved results */
 	int ALURESULT;
+	int Read_data;
 	int immediate;
+	bool zero = ALURESULT == 0;
+	int RegReadData1;
+	int RegReadData2;
+
 	int RS,RT,RD;
 };
+typedef struct PipelineReg pr;
 enum PipelineStage
 {
 	IF = 0,
@@ -61,11 +92,7 @@ enum PipelineStage
 	ALU,
 	MEM,
 	WB
-};
-typedef struct PipelineReg pr;
-struct MIPS_Architecture
-{
-	int registers[32] = {0}, PCcurr = 0, PCnext;
+};int registers[32] = {0}, PCcurr = 0, PCnext;
 	std::unordered_map<std::string, std::function<int(MIPS_Architecture &, std::string, std::string, std::string)>> instructions;
 	std::unordered_map<std::string, int> registerMap, address;
 
@@ -444,7 +471,113 @@ struct MIPS_Architecture
 		}
 		handleExit(SUCCESS, clockCycles);
 	}
+	void executePipelined(){
+		int clockCycles=0;
+		pr IF_ID;
+		pr ID_ALU;
+		pr ALU_MEM;
+		pr MEM_WB;
+		while (PCcurr < commands.size())
+		{
+			++clockCycles;
+			// write back (during first half )	
+			if(MEM_WB.at_PC >= 0 && (MEM_WB.WB)->RegWrite){
+				
+				if ((MEM_WB.WB)->MemtoReg)  registers[MEM_WB.RD] = MEM_WB.Read_data;
+				else registers[MEM_WB.RD] = MEM_WB.ALURESULT;
 
+			};
+		
+			// mem stage 
+			if (ALU_MEM.at_PC >= 0 ){
+				if ((ALU_MEM.MEM)->MemWrite) data[ALU_MEM.ALURESULT] = ALU_MEM.RegReadData2; 
+				if ( (ALU_MEM.MEM)->MemRead) MEM_WB.Read_data = data[ALU_MEM.ALURESULT];
+				(ALU_MEM.MEM)->branch =((ALU_MEM).zero && (ALU_MEM.MEM)->branch);
+				if ((ALU_MEM.MEM)->branch || (ALU_MEM.MEM)->jump ) PCnext = ALU_MEM.PC_new;	
+				MEM_WB.WB = ALU_MEM.WB;
+				MEM_WB.ALURESULT = ALU_MEM.ALURESULT;
+				MEM_WB.RD = ALU_MEM.RD;	
+			}
+
+			MEM_WB.at_PC = ALU_MEM.at_PC;
+
+
+
+			// EX Stage
+
+			if (ID_ALU.at_PC >= 0){
+						
+				if ((ID_ALU.EX)->OP == 0){
+					if (ID_ALU.EX->ALUSrc) ALU_MEM.ALURESULT = ID_ALU.immediate + ID_ALU.RegReadData1;
+					else ALU_MEM.ALURESULT = ID_ALU.RegReadData1 + ID_ALU.RegReadData2;
+				}
+				else if ((ID_ALU.EX)->OP == 1){	
+					if (ID_ALU.EX->ALUSrc) ALU_MEM.ALURESULT = ID_ALU.immediate - ID_ALU.RegReadData1;
+					else ALU_MEM.ALURESULT = ID_ALU.RegReadData1 - ID_ALU.RegReadData2;
+				}
+
+				else {
+					if (ID_ALU.EX->ALUSrc) ALU_MEM.ALURESULT = ID_ALU.immediate * ID_ALU.RegReadData1;
+					else ALU_MEM.ALURESULT = ID_ALU.RegReadData1 * ID_ALU.RegReadData2;				
+				}
+				 
+				ALU_MEM.zero = (ALU_MEM.ALURESULT == 0);
+				(ALU_MEM.MEM)=(ID_ALU.MEM);
+				(ALU_MEM.WB) = ID_ALU.WB;
+				
+				if((ID_ALU.EX)->RegDst) ALU_MEM.RD = ID_ALU.RD;
+				else ALU_MEM.RD = ID_ALU.RT;  
+				ALU_MEM.RegReadData2 = ID_ALU.RegReadData2;
+
+			} 
+			ALU_MEM.at_PC = ID_ALU.at_PC;
+			ALU_MEM.PC_new = ID_ALU.PC_new;
+			// Decode phase  
+			if(IF_ID.at_PC >= 0) {
+				
+				string instruction_name = (IF_ID.currcomand)[0];
+				string rs = IF_ID.currcomand[1];
+				string rt = IF_ID.currcomand[2];
+				srting	
+				EXctr excontrols = {.RegDst=1, .OP=0 , .ALUSrc = 0};
+				IF_ID.EX = &excontrols;
+				MEMctr memcontrols = {.branch = 0, .MemRead=0 , .MemWrite =0 ,.jump =0};
+				IF_ID.MEM = &memcontrols;
+				WBctr wbcontrols = {.RegWrite = 1, .MemtoReg =0};
+				IF_ID.WB = &wbcontrols;
+				
+				if (instruction_name == "lw"){
+					(IF_ID.EX)->RegDst =0;
+					(IF_ID.EX)->ALUSrc =1;
+					(IF_ID.MEM)->MemRead =1;
+					(IF_ID.WB)->MemtoReg =1;					
+				}
+				else if (instruction_name == "sw"){
+					(IF_ID.EX)->ALUSrc =1;
+					(IF_ID.MEM)->MemWrite=1;
+					(IF_ID.WB)->RegWrite=0;					
+				}
+				else if (instruction_name == "beq"){
+					(IF_ID.MEM)->branch=1;
+					(IF_ID.EX)->OP =1;
+					(IF_ID.WB)->RegWrite=0;					
+				}
+				else if (instruction_name =="j"){
+					(IF_ID.MEM)->jump =1;
+					(IF_ID.WB)->RegWrite =0;
+				}
+				else if (instruction_name == "addi"){
+					(IF_ID.EX)->ALUSrc=1;	
+				}
+			ID_ALU.RegReadData1 = register[registerMap[]]
+			}
+
+
+		}
+
+
+		
+	}
 	// print the register data in hexadecimal
 	void printRegisters(int clockCycle)
 	{
