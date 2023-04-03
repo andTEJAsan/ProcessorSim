@@ -534,7 +534,7 @@ struct MIPS_Architecture
 		pr ID_ALU;
 		pr ALU_MEM;
 		pr MEM_WB;
-		while (PCcurr < commands.size()) // if pc < 0 then a stall will occur
+		while (PCcurr < commands.size() ) // if pc < 0 then a stall will occur
 		{	
 			bool is_stall = false ; 
 			++clockCycles;
@@ -546,12 +546,12 @@ struct MIPS_Architecture
 			cout << "WB" << '\n' ; 
 			// write back (during first half )	
 			if(MEM_WB.at_PC >= 0 && (MEM_WB.WB)->RegWrite){
-				cout << "id_alu.op is " << (ID_ALU.EX)->OP <<"\n"  ; 
+				// cout << "id_alu.op is " << (ID_ALU.EX)->OP <<"\n"  ; 
 				if ((MEM_WB.WB)->MemtoReg)  registers[MEM_WB.RD] = MEM_WB.Read_data;
 				else registers[MEM_WB.RD] = MEM_WB.ALURESULT;
 
 				
-				printRegisters() ;  
+				// printRegisters() ;  
 
 			};
 
@@ -559,7 +559,7 @@ struct MIPS_Architecture
 			// mem stage 
 			cout << "MEM" << "\n" ;
 			if (ALU_MEM.at_PC >= 0 ){
-				 cout << "id_alu.op is " << (ID_ALU.EX)->OP <<"\n"  ;   
+				//  cout << "id_alu.op is " << (ID_ALU.EX)->OP <<"\n"  ;   
 				if ((ALU_MEM.MEM)->MemWrite) {
 					data[ALU_MEM.ALURESULT] = ALU_MEM.RegReadData2;
 					cout << "wrote " << ALU_MEM.RegReadData2 << " at address " << ALU_MEM.ALURESULT << "\n" ;
@@ -593,7 +593,9 @@ struct MIPS_Architecture
 			if (ID_ALU.at_PC >= 0){
 				cout << "entered EX" << "\n" ; 
 
-				cout << "(ID_ALU.EX)->OP " << (ID_ALU.EX)->OP << "\n" ;  
+				// cout << "(ID_ALU.EX)->OP " << (ID_ALU.EX)->OP << "\n" ;  
+                // cout << "printing EX controls" << "\n" ; 
+                // (ID_ALU.EX)->print(ID_ALU.EX) ; 
 				if ((ID_ALU.EX)->OP == 0){
 					
 					if ((ID_ALU.EX)->ALUSrc) {
@@ -684,6 +686,7 @@ struct MIPS_Architecture
 				else if (instruction_name == "addi"){
 					(ID_ALU.EX)->ALUSrc=1;	
 				}
+				
 			
 
 			// setting the register values etc
@@ -735,12 +738,13 @@ struct MIPS_Architecture
 				ID_ALU.PC_new = locateAddress(IF_ID.currcomand[3]) ; 
 
 
+				
+
 			}
 			ID_ALU.at_PC = IF_ID.at_PC ; 
 
 			cout << "decoded signals" << "\n" ; 
 			ID_ALU.print(&ID_ALU) ;
-			cout << "id_alu.op is " << (ID_ALU.EX)->OP <<"\n"  ;   
 
 
 			}
