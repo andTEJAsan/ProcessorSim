@@ -1,9 +1,3 @@
-/**
- * @file MIPS_Processor.hpp
- * @author Mallika Prabhakar and Sayam Sethi
- *
- */
-
 #ifndef __MIPS_PROCESSOR_HPP__
 #define __MIPS_PROCESSOR_HPP__
 using namespace std;
@@ -16,34 +10,6 @@ using namespace std;
 #include <iostream>
 #include <boost/tokenizer.hpp>
 using namespace std ; 
-/*
-signature of PipelineReg - 
-
-IF/ID - 1. PC + 4
-	2. Fetched unparsed instruction 
-
-ID/ALU - 1. WB.CONTROL
-	 2. M.CONTROL
-	 3. EX.CONTROL 
-	 4. NEW_PC
-	 5. RS
-	 6. RT 
-	 7. IMMEDIATE 
-	 8. RD
-
-ALU/MEM	1. WB.CONTROL
-	2. MEM.CONTROL
-	3. NEW_PC 
-	4. ZERO 
-	5. ALU_RESULT 
-	6. RT
-	7. RD 
-
-MEM/WB 	1. WB.CONTROL
-	2. ALU_RESULT
-	3. MEM_READ
-	4. RD
-*/
 
 struct MIPS_Architecture
 {
@@ -79,7 +45,7 @@ struct MIPS_Architecture
 		bool branch;
 		bool branch_not ; 
 		bool RegDst;
-		int OP; // 0 denotes add , 1 denotes subtraction, 2 denotes multiplication
+		int OP; // 0 denotes add , 1 denotes subtraction, 2 denotes multiplication , 3 denotes slt
 		bool ALUSrc ; // true if alu src has to be immediate field
 
 		void print(struct EXctr* ptr){
@@ -185,20 +151,11 @@ struct MIPS_Architecture
 	int data[MAX >> 2] = {0};
 	std::vector<std::vector<std::string>> commands;
 	std::vector<int> commandCount;
-	enum exit_code
-	{
-		SUCCESS = 0,
-		INVALID_REGISTER,
-		INVALID_LABEL,
-		INVALID_ADDRESS,
-		SYNTAX_ERROR,
-		MEMORY_ERROR
-	};
+	
 
 	// constructor to initialise the instruction set
 	MIPS_Architecture(std::ifstream &file)
 	{
-		instructions = {{"add", &MIPS_Architecture::add}, {"sub", &MIPS_Architecture::sub}, {"mul", &MIPS_Architecture::mul}, {"beq", &MIPS_Architecture::beq}, {"bne", &MIPS_Architecture::bne}, {"slt", &MIPS_Architecture::slt}, {"j", &MIPS_Architecture::j}, {"lw", &MIPS_Architecture::lw}, {"sw", &MIPS_Architecture::sw}, {"addi", &MIPS_Architecture::addi}};
 
 		for (int i = 0; i < 32; ++i)
 			registerMap["$" + std::to_string(i)] = i;
@@ -223,238 +180,7 @@ struct MIPS_Architecture
 		commandCount.assign(commands.size(), 0);
 	}
 
-	// perform add operation
-	int add(std::string r1, std::string r2, std::string r3)
-	{
-		return op(r1, r2, r3, [&](int a, int b)
-				  { return a + b; });
-	}
 
-	// perform subtraction operation
-	int sub(std::string r1, std::string r2, std::string r3)
-	{
-		return op(r1, r2, r3, [&](int a, int b)
-				  { return a - b; });
-	}
-
-	// perform multiplication operation
-	int mul(std::string r1, std::string r2, std::string r3)
-	{
-		return op(r1, r2, r3, [&](int a, int b)
-				  { return a * b; });
-	}
-
-	// perform the binary operation
-	int op(std::string r1, std::string r2, std::string r3, std::function<int(int, int)> operation)
-	{
-		if (!checkRegisters({r1, r2, r3}) || registerMap[r1] == 0)
-			return 1;
-		registers[registerMap[r1]] = operation(registers[registerMap[r2]], registers[registerMap[r3]]);
-		PCnext = PCcurr + 1;
-		return 0;
-	}
-
-	// perform the beq operation
-	int beq(std::string r1, std::string r2, std::string label)
-	{
-		return bOP(r1, r2, label, [](int a, int b)
-				   { return a == b; });
-	}
-
-	// perform the bne operation
-	int bne(std::string r1, std::string r2, std::string label)
-	{
-		return bOP(r1, r2, label, [](int a, int b)
-				   { return a != b; });
-	}
-
-	// implements beq and bne by taking the comparator
-	int bOP(std::string r1, std::string r2, std::string label, std::function<bool(int, int)> comp)
-	{
-		if (!checkLabel(label))
-			return 4;
-		if (address.find(label) == address.end() || address[label] == -1)
-			return 2;
-		if (!checkRegisters({r1, r2}))
-			return 1;
-		PCnext = comp(registers[registerMap[r1]], registers[registerMap[r2]]) ? address[label] : PCcurr + 1;
-		return 0;
-	}
-
-	// implements slt operation
-	int slt(std::string r1, std::string r2, std::string r3)
-	{
-		if (!checkRegisters({r1, r2, r3}) || registerMap[r1] == 0)
-			return 1;
-		registers[registerMap[r1]] = registers[registerMap[r2]] < registers[registerMap[r3]];
-		PCnext = PCcurr + 1;
-		return 0;
-	}
-
-	// perform the jump operation
-	int j(std::string label, std::string unused1 = "", std::string unused2 = "")
-	{
-		if (!checkLabel(label))
-			return 4;
-		if (address.find(label) == address.end() || address[label] == -1)
-			return 2;
-		PCnext = address[label];
-		return 0;
-	}
-
-	// perform load word operation
-	int lw(std::string r, std::string location, std::string unused1 = "")
-	{
-		if (!checkRegister(r) || registerMap[r] == 0)
-			return 1;
-		int address = locateAddress(location);
-		if (address < 0)
-			return abs(address);
-		registers[registerMap[r]] = data[address];
-		PCnext = PCcurr + 1;
-		return 0;
-	}
-
-	// perform store word operation
-	int sw(std::string r, std::string location, std::string unused1 = "")
-	{
-		if (!checkRegister(r))
-			return 1;
-		int address = locateAddress(location);
-		if (address < 0)
-			return abs(address);
-		data[address] = registers[registerMap[r]];
-		PCnext = PCcurr + 1;
-		return 0;
-	}
-
-	// for strings of form 56($s1) ; 
-	int locateAddress(std::string location)
-	{
-		if (location.back() == ')')
-		{
-			try
-			{
-				int lparen = location.find('('), offset = stoi(lparen == 0 ? "0" : location.substr(0, lparen));
-				std::string reg = location.substr(lparen + 1);
-				reg.pop_back();
-				if (!checkRegister(reg))
-					return -3;
-				int address = registers[registerMap[reg]] + offset;
-				if (address % 4 || address < int(4 * commands.size()) || address >= MAX)
-					return -3;
-				return address / 4;
-			}
-			catch (std::exception &e)
-			{
-				return -4;
-			}
-		}
-		try
-		{
-			int address = stoi(location);
-			if (address % 4 || address < int(4 * commands.size()) || address >= MAX)
-				return -3;
-			return address / 4;
-		}
-		catch (std::exception &e)
-		{
-			return -4;
-		}
-	}
-
-	// perform add immediate operation
-	int addi(std::string r1, std::string r2, std::string num)
-	{
-		if (!checkRegisters({r1, r2}) || registerMap[r1] == 0)
-			return 1;
-		try
-		{
-			registers[registerMap[r1]] = registers[registerMap[r2]] + stoi(num);
-			PCnext = PCcurr + 1;
-			return 0;
-		}
-		catch (std::exception &e)
-		{
-			return 4;
-		}
-	}
-
-	// checks if label is valid
-	inline bool checkLabel(std::string str)
-	{
-		return str.size() > 0 && isalpha(str[0]) && all_of(++str.begin(), str.end(), [](char c)
-														   { return (bool)isalnum(c); }) &&
-			   instructions.find(str) == instructions.end();
-	}
-
-	// checks if the register is a valid one
-	inline bool checkRegister(std::string r)
-	{
-		return registerMap.find(r) != registerMap.end();
-	}
-
-	// checks if all of the registers are valid or not
-	bool checkRegisters(std::vector<std::string> regs)
-	{
-		return std::all_of(regs.begin(), regs.end(), [&](std::string r)
-						   { return checkRegister(r); });
-	}
-
-	/*
-		handle all exit codes:
-		0: correct execution
-		1: register provided is incorrect
-		2: invalid label
-		3: unaligned or invalid address
-		4: syntax error
-		5: commands exceed memory limit
-	*/
-	void handleExit(exit_code code, int cycleCount)
-	{
-		std::cout << '\n';
-		switch (code)
-		{
-		case 1:
-			std::cerr << "Invalid register provided or syntax error in providing register\n";
-			break;
-		case 2:
-			std::cerr << "Label used not defined or defined too many times\n";
-			break;
-		case 3:
-			std::cerr << "Unaligned or invalid memory address specified\n";
-			break;
-		case 4:
-			std::cerr << "Syntax error encountered\n";
-			break;
-		case 5:
-			std::cerr << "Memory limit exceeded\n";
-			break;
-		default:
-			break;
-		}
-		if (code != 0)
-		{
-			std::cerr << "Error encountered at:\n";
-			for (auto &s : commands[PCcurr])
-				std::cerr << s << ' ';
-			std::cerr << '\n';
-		}
-		std::cout << "\nFollowing are the non-zero data values:\n";
-		for (int i = 0; i < MAX / 4; ++i)
-			if (data[i] != 0)
-				std::cout << 4 * i << '-' << 4 * i + 3 << std::hex << ": " << data[i] << '\n'
-						  << std::dec;
-		std::cout << "\nTotal number of cycles: " << cycleCount << '\n';
-		std::cout << "Count of instructions executed:\n";
-		for (int i = 0; i < (int)commands.size(); ++i)
-		{
-			std::cout << commandCount[i] << " times:\t";
-			for (auto &s : commands[i])
-				std::cout << s << ' ';
-			std::cout << '\n';
-		}
-	}
 	
 	void print_vector(vector<string> vi){
 		for (auto i = vi.begin() ; i != vi.end() ; i ++){
@@ -536,37 +262,7 @@ struct MIPS_Architecture
 		// }
 	}
 
-	// execute the commands sequentially (no pipelining)
-	// void executeCommandsUnpipelined()
-	// {
-	// 	if (commands.size() >= MAX / 4)
-	// 	{
-	// 		handleExit(MEMORY_ERROR, 0);
-	// 		return;
-	// 	}
 
-	// 	int clockCycles = 0;
-	// 	while (PCcurr < commands.size())
-	// 	{
-	// 		++clockCycles;
-	// 		std::vector<std::string> &command = commands[PCcurr]; // Fetch the instruction
-	// 		if (instructions.find(command[0]) == instructions.end())
-	// 		{
-	// 			handleExit(SYNTAX_ERROR, clockCycles);
-	// 			return;
-	// 		}
-	// 		exit_code ret = (exit_code)instructions[command[0]](*this, command[1], command[2], command[3]);
-	// 		if (ret != SUCCESS)
-	// 		{
-	// 			handleExit(ret, clockCycles);
-	// 			return;
-	// 		}
-	// 		++commandCount[PCcurr];
-	// 		PCcurr = PCnext;
-	// 		printRegisters(clockCycles);
-	// 	}
-	// 	handleExit(SUCCESS, clockCycles);
-	// }
 
 	void executePipelined(){
 		int clockCycles=0; WBctr wbarr[8] ; EXctr exarr[8] ; MEMctr1 mem1arr[8] ; MEMctr2 mem2arr[8] ; 
@@ -612,24 +308,24 @@ struct MIPS_Architecture
      pr* dummy ; 
 		
 
-		bool is_RR_stall = false ; bool is_beq_stall = false ; bool is_j_stall = false ; bool is_fifo_stall = false ; 
-		int no_of_RR_stall = 0 ; int prev_RD = 0 ; bool prev_RegWrite = false ; int prev_PC = -1 ; int check_rd = -1 ;   
+		bool is_stall = false ; bool is_beq_stall = false ; bool is_j_stall = false ; bool is_fifo_stall = false ; 
+		int no_of_RR_stall = 0 ; 
+		int prev_PC = -1 ; bool prev_is_9_stage = false ; // saving values of RR stage for fifo stall detection in ID1 
 		bool check_rs = false ; bool check_rt = false ; 
 
 		bool if1_if2_write_enable = true ; bool if2_id1_write_enable = true ;
 		bool id1_id2_write_enable = true ; bool id2_rr_write_enable = true ;
-		string rs, rt, rd ; bool prev_is_9_stage = false ; 
+		string rs, rt, rd ; 
 
 		
 		printRegistersAndMemoryDelta(0) ; 
 
-		vector<check> vi ; // vector to check which stages are active 
+		vector<check> vi ; // vector to check which stages are active and can cause stall (stores relevant values of each active stage for checking stall)
 		while ( !(PCcurr == -1 && IF1_IF2.at_PC == -1 && IF2_ID1.at_PC == -1 && ID1_ID2.at_PC == -1 && 
 						 		ID2_RR.at_PC == -1 && RR_EX.at_PC == -1 && EX_DM1.at_PC == -1 && 
                                 DM1_DM2.at_PC == -1 && DM2_WB.at_PC == -1)) // if pc < 0 then a stall will occur
 		{		
-			// cout << "current pc is " << PCcurr << '\n' ; 
-			// cout << "ended signal is " << ended << "\n" ; 
+			
 			
 			++clockCycles;
 			// cout << "clock cycle - " << clockCycles << "\n" ; 
@@ -638,41 +334,35 @@ struct MIPS_Architecture
 
 			  
 
-			// cout << "WB" << '\n' ; 
-			// write back (during first half )	// rest stages are in second half cycle 
-            // cout << DM2_WB.at_PC  << " " << (DM2_WB.WB)->RegWrite << "\n" ; 
-			if(DM2_WB.at_PC >= 0 && (DM2_WB.WB)->RegWrite){
+			
+			// write back 
+			if(DM2_WB.at_PC >= 0 && (DM2_WB.WB)->RegWrite && DM2_WB.RD != 0){
 				
 				
 				check temp = {.rd = -1  , .at_pc = -1, .regwrite = false } ; 
 				temp.rd = DM2_WB.RD ; temp.regwrite = (DM2_WB.WB)->RegWrite ; temp.at_pc = DM2_WB.at_PC ; 
-				vi.push_back(temp) ;  // written as RW and RR take an entire cycle 
+				vi.push_back(temp) ;  
+				// written as RW and RR take an entire cycle 
 
 				if ((DM2_WB.WB)->MemtoReg)  registers[DM2_WB.RD] = DM2_WB.Read_data;
 				else registers[DM2_WB.RD] = DM2_WB.ALURESULT;
 
-				// cout << "---------- " << '\n'  ; 
-				// printRegisters() ;  
-				// cout << "-------------" << "\n" ; 
-				// if (MEM_WB.at_PC == (commands.size() - 1) ) break ; 
+				
 			};
 
 			
 			// DM2 stage (memwrite)
-			// cout << "DM2" << "\n" ;
-			
 			if (DM1_DM2.at_PC >= 0 && DM1_DM2.is_9_stage){
 
 				check temp = {.rd = -1  , .at_pc = -1, .regwrite = false } ; 
 				temp.rd = DM1_DM2.RD ; temp.regwrite = (DM1_DM2.WB)->RegWrite ; temp.at_pc = DM1_DM2.at_PC ; 
-				vi.push_back(temp) ;				
+				vi.push_back(temp) ; // stall check 				
 				  
 				if ((DM1_DM2.MEM2)->MemWrite) {
 					if ( data[(DM1_DM2.ALURESULT)/4] != DM1_DM2.RegReadData2){
 						memoryDelta[(DM1_DM2.ALURESULT)/4] = DM1_DM2.RegReadData2 ;
 					   }
 					data[DM1_DM2.ALURESULT/4] = DM1_DM2.RegReadData2;
-					// cout << "wrote " << DM1_DM2.RegReadData2 << " at address " << DM1_DM2.ALURESULT/4 << "\n" ;
 				} 
 				
 				(DM2_WB.WB)->MemtoReg = (DM1_DM2.WB)->MemtoReg;
@@ -685,23 +375,19 @@ struct MIPS_Architecture
 
 			DM2_WB.at_PC = DM1_DM2.at_PC;
 
-			// prev_RD = ALU_MEM.RD ;// saving the value of alu_mem rd for stall check
-			// prev_RegWrite = (ALU_MEM.WB)->RegWrite ; // saving the value of alu_mem regwrite for stall check
-			// prev_PC = ALU_MEM.at_PC ; // saving the value of alu_mem pc for stall check
+			
 
 
 
             // DM1 stage (mem read stage) 
-            // cout << "DM1" << "\n" ;
             if (EX_DM1.at_PC >= 0 && EX_DM1.is_9_stage){
 				check temp = {.rd = -1  , .at_pc = -1, .regwrite = false } ; 
 				temp.rd = EX_DM1.RD ; temp.regwrite = (EX_DM1.WB)->RegWrite ; temp.at_pc = EX_DM1.at_PC ; 
-				vi.push_back(temp) ;
+				vi.push_back(temp) ; // stall check 
 
 
                 if ( (EX_DM1.MEM1)->MemRead) {
                         DM1_DM2.Read_data = data[EX_DM1.ALURESULT/4];
-                        // cout << "read " <<DM1_DM2.Read_data<< " from address " << EX_DM1.ALURESULT/4 << "\n" ;
                     }
 
                 (DM1_DM2.WB)->MemtoReg = (EX_DM1.WB)->MemtoReg;
@@ -719,7 +405,6 @@ struct MIPS_Architecture
             DM1_DM2.at_PC = EX_DM1.at_PC  ; 
 
 			// EX Stage
-			// cout << "EX" << "\n" ;
 			if (RR_EX.at_PC >= 0){
 				check temp = {.rd = -1  , .at_pc = -1, .regwrite = false } ; 
 				temp.regwrite = (RR_EX.WB)->RegWrite ; temp.at_pc = RR_EX.at_PC ; 
@@ -735,33 +420,26 @@ struct MIPS_Architecture
 					
 					if ((RR_EX.EX)->ALUSrc) {
 						dummy->ALURESULT = RR_EX.immediate + RR_EX.RegReadData1;
-						// cout << "added " << RR_EX.immediate << " and " << RR_EX.RegReadData1 << "to get " << dummy->ALURESULT<< "\n" ; 
 					}
 					else {
 						dummy->ALURESULT = RR_EX.RegReadData1 + RR_EX.RegReadData2;
-						// cout << "added " << RR_EX.RegReadData2 << " and " << RR_EX.RegReadData1 << "to get " << dummy->ALURESULT<< "\n" ; 
-
 					}
 				}
 				else if ((RR_EX.EX)->OP == 1){	
 					if ((RR_EX.EX)->ALUSrc) {
 						dummy->ALURESULT = RR_EX.RegReadData1 - RR_EX.immediate ;
-						// cout << "subtracted " << RR_EX.immediate << " from " << RR_EX.RegReadData1 << "to get " << dummy->ALURESULT<< "\n" ;
 					}
 					else {
 						dummy->ALURESULT = RR_EX.RegReadData1 - RR_EX.RegReadData2;
-						// cout << "subtracted " << RR_EX.RegReadData2 << " from " << RR_EX.RegReadData1 << "to get " << dummy->ALURESULT<< "\n" ;
 					}
 				}
 
 				else if ((RR_EX.EX)->OP == 2) {
 					if ((RR_EX.EX)->ALUSrc) {
 						dummy->ALURESULT = RR_EX.immediate * RR_EX.RegReadData1;
-						// cout << "multiplied " << RR_EX.immediate << " and " << RR_EX.RegReadData1 << "to get " << dummy->ALURESULT<< "\n" ; 
 					}
 					else {
 						dummy->ALURESULT = RR_EX.RegReadData1 * RR_EX.RegReadData2;		
-						// cout << "multiplied " << RR_EX.RegReadData2 << " and " << RR_EX.RegReadData1 << "to get " << dummy->ALURESULT<< "\n" ;
 					}		
 				}
 				else if ((RR_EX.EX)->OP == 3) {
@@ -781,13 +459,8 @@ struct MIPS_Architecture
 					is_beq_stall = true ; 
 					// cout << "five stalls inserted for beq instruction" << "\n" ;
 					dummy->zero = (dummy->ALURESULT == 0);
+					PCnext = ((RR_EX.EX)->branch && dummy->zero) ?  RR_EX.PC_new : (RR_EX.at_PC + 1) ; 
 					
-					if ((RR_EX.EX)->branch && dummy->zero){
-						PCnext = RR_EX.PC_new ;
-					}
-					else{
-						PCnext = RR_EX.at_PC + 1; 
-					}
 					// cout << "branching to new PC " << PCnext << "\n" ;
 				}
 
@@ -797,12 +470,8 @@ struct MIPS_Architecture
 					// cout << "five stalls inserted for beq instruction" << "\n" ;
 					dummy->zero = (dummy->ALURESULT == 0);
 					
-					if ((RR_EX.EX)->branch && (!dummy->zero) ){
-						PCnext = RR_EX.PC_new ;
-					}
-					else{
-						PCnext = RR_EX.at_PC + 1; 
-					}
+					PCnext = ((RR_EX.EX)->branch && (!dummy->zero) ) ?  RR_EX.PC_new : (RR_EX.at_PC + 1) ; 
+
 					// cout << "branching to new PC " << PCnext << "\n" ;
 				}
 				 
@@ -821,16 +490,13 @@ struct MIPS_Architecture
 
 				vi.push_back(temp) ; 
 
-				// cout << "write back register is " <<   dummy->RD << '\n' ; 
 				dummy->RegReadData2 = RR_EX.RegReadData2;
                 dummy->is_9_stage = RR_EX.is_9_stage ; 
                 dummy->at_PC = RR_EX.at_PC ; 
 				if (!RR_EX.is_9_stage) {
 					EX_DM1.at_PC = -1 ; 
 				}
-                // if (clockCycles == 6){
-                //     cout << "DM2_WB.at_PC " << DM2_WB.at_PC << "\n" ; 
-                // }
+                
                 dummy->PC_new = RR_EX.PC_new ; 
 			} 
 			
@@ -841,10 +507,10 @@ struct MIPS_Architecture
 
 
             // RR stage 
-            // cout << "RR stage" << "\n" ; 
             if (ID2_RR.at_PC >= 0 ){
 
 				// checking for data hazards
+				// setting rs and rt for checking
 				string instruction_name = (ID2_RR.currcomand)[0] ; 
 				if (instruction_name == "add" || instruction_name == "sub" || instruction_name == "mul" || instruction_name == "slt"){
 					  rs = (ID2_RR.currcomand)[2]; check_rs = true ; 
@@ -857,15 +523,14 @@ struct MIPS_Architecture
 
 				else if (instruction_name == "lw" && (ID2_RR.currcomand)[2].back() == ')'){
 					int lparen = (ID2_RR.currcomand)[2].find('(');
-					  rs = (ID2_RR.currcomand)[2].substr(lparen + 1); rs.pop_back();
+					rs = (ID2_RR.currcomand)[2].substr(lparen + 1); rs.pop_back();
 					check_rs = true  ; check_rt = false ; 
 				}
 
 				else if (instruction_name == "sw" ){
 					if ((ID2_RR.currcomand)[2].back() == ')'){
 					int lparen = (ID2_RR.currcomand)[2].find('(');
-					  rs = (ID2_RR.currcomand)[2].substr(lparen + 1); rs.pop_back();
-					//   cout << "decoded rs is " << rs << "\n" ; 
+					rs = (ID2_RR.currcomand)[2].substr(lparen + 1); rs.pop_back();
 					check_rs = true ; 
 					}
 					else  check_rs = false ; 
@@ -881,7 +546,7 @@ struct MIPS_Architecture
 					check to_check = (vi.back())  ; // struct of stage which is active and most recent
 					vi.pop_back() ; 
 					if ( to_check.at_pc >= 0 && to_check.regwrite && (to_check.rd != 0) && ( (check_rs && registerMap[rs] == to_check.rd ) || (check_rt && registerMap[rt] == to_check.rd ) ) ){
-					is_RR_stall = true  ;
+					is_stall = true  ;
 					if1_if2_write_enable = if2_id1_write_enable = id1_id2_write_enable = id2_rr_write_enable = false ; 
 					// cout << "stalling" << "\n" ;  
 					break ; 
@@ -890,7 +555,7 @@ struct MIPS_Architecture
 
 				}
 
-				if (!is_RR_stall){
+				if (!is_stall){
 
 					string instruction_name = ID2_RR.currcomand[0] ; 
 					if (instruction_name == "add" || instruction_name == "sub" || instruction_name == "mul" || instruction_name == "slt"){
@@ -902,8 +567,6 @@ struct MIPS_Architecture
 						RR_EX.RegReadData1 = registers[registerMap[rs]] ; 
 						RR_EX.RegReadData2 = registers[registerMap[rt]] ; 
 						
-						// cout << "registers read are " << rs << " " << RR_EX.RegReadData1 << rt << " " << RR_EX.RegReadData2 << '\n' ;  
-
 						RR_EX.RD = registerMap[rd] ; 
 						RR_EX.RT = registerMap[rt] ; 
 						RR_EX.PC_new = ID2_RR.at_PC + 1;
@@ -978,9 +641,7 @@ struct MIPS_Architecture
 			prev_PC = ID2_RR.at_PC ; 
 
 
-			// ID2 phase  (decoding control signals)
-			// cout << "ID2" <<"\n" ; 
-			
+			// ID2 phase  (decoding control signals)			
 			if(ID1_ID2.at_PC >= 0 && id2_rr_write_enable) {
 				string instruction_name = (ID1_ID2.currcomand)[0];
 				// cout << "decoding instruction- "   ; 
@@ -1033,7 +694,6 @@ struct MIPS_Architecture
                         (ID2_RR.WB)->RegWrite =0;
                         // cout << "jumping to new PC " << PCnext << "\n"  ; 
                         // cout << "inserting three stalls " << "\n" ; 
-						
 					}
 					else if (instruction_name == "addi"){
 						(ID2_RR.EX)->ALUSrc=1;	 
@@ -1050,8 +710,7 @@ struct MIPS_Architecture
 			}
 
 
-            // ID1 STAGE (detect hazards in this stage ?)
-            // cout <<"ID1 stage " << "\n" ; 
+            // ID1 STAGE (detect hazards in this stage )
             if (IF2_ID1.at_PC >= 0 && id1_id2_write_enable){
                 // write stall detection logic 
                 bool temp = false ;  string instruction_name = (IF2_ID1.currcomand)[0]  ; 
@@ -1079,9 +738,7 @@ struct MIPS_Architecture
             
 			
 
-			// IF2 stage 
-			// cout << "IF2 stage" << "\n" ;
-			
+			// IF2 stage 			
 			if ( IF1_IF2.at_PC >= 0 && if2_id1_write_enable) {
 				 
                 IF2_ID1.at_PC = IF1_IF2.at_PC ;
@@ -1100,7 +757,6 @@ struct MIPS_Architecture
 
 
             // IF1 stage 
-            // cout << "IF1 stage" << "\n" ; 
 			if ( (PCcurr >= 0 && PCcurr < commands.size()) && if1_if2_write_enable ){
 				 
                 IF1_IF2.at_PC = PCcurr ;
@@ -1115,7 +771,7 @@ struct MIPS_Architecture
 			}
 
             // fifo stall 
-            if (is_fifo_stall && !is_j_stall && !is_beq_stall && !is_RR_stall){
+            if (is_fifo_stall && !is_j_stall && !is_beq_stall && !is_stall){
 				// cout << "doing fifo stalls " << "\n" ; 
                 ID1_ID2.at_PC = -1 ; 
                 PCnext = PCcurr ; 
@@ -1123,7 +779,7 @@ struct MIPS_Architecture
 			
 			
 			// doing j stalls
-			if (is_j_stall && !is_beq_stall&& !is_RR_stall){
+			if (is_j_stall && !is_beq_stall&& !is_stall){
 				IF1_IF2.at_PC = -1 ; 
                 IF2_ID1.at_PC = -1 ; 
                 ID1_ID2.at_PC = -1 ;  
@@ -1131,7 +787,7 @@ struct MIPS_Architecture
 			}
 
 			// doing data dependency stalls
-			if (is_RR_stall && !is_beq_stall){
+			if (is_stall && !is_beq_stall){
 				RR_EX.at_PC = -1 ; 
 				PCnext = PCcurr ;  
 				// cout << "rr stalling" << '\n' ; 
@@ -1151,16 +807,16 @@ struct MIPS_Architecture
 
 			// updating program counter
 			if (PCnext >= commands.size()) { PCnext = -1 ; }  
-			PCcurr = PCnext ;  
-			is_RR_stall = false ; is_beq_stall = false ; is_j_stall = false ; check_rs = check_rt = false ; 
+			PCcurr = PCnext ;
+			// setting counters back   
+			is_stall = false ; is_beq_stall = false ; is_j_stall = false ; check_rs = check_rt = false ; 
             is_fifo_stall = false ; if1_if2_write_enable = if2_id1_write_enable = id1_id2_write_enable = id2_rr_write_enable =  true ; 
+			// clearing stall vector 
 			vi.clear() ; 
 			printRegistersAndMemoryDelta(clockCycles);
-			cout << "\n" ; 
+			// cout << "\n" ; 
 		}
-		// printRegisters() ; 
-		// cout << "printing memory " << "\n" ; 
-		// cout << data[83] << "\n" ; 
+		
 		
 
 		
