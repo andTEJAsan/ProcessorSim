@@ -114,8 +114,7 @@ struct SaturatingBHRBranchPredictor : public BranchPredictor {
         int address = static_cast<int> (bhr.to_ulong()); 
         std::bitset<2> bhrpredict = (bhrTable[address]);
         int bhrp = static_cast<int> (bhrpredict.to_ulong());
-        if(bhrp==0 || bhrp==3) return bhrpredict.test(1);
-        else return ((~combr | ~bhrpredict)).test(1);
+        return bhrpredict.test(1);
     }
 
 
