@@ -10,6 +10,11 @@ This code is the starter code for Assignment 2 of the 2023 spring offering of th
 ## Usage
 After cloning the repository, run the following commands to compile and run the sample program:
 ```bash
-$ make all
-$ ./sample sample.asm
+$ make compile
+$ make run_5stage
+$ make run_5stage_bypass
+$ make run_79stage
+$ make run_79stage_bypass
+
+input file has to be in input.asm
 ```
