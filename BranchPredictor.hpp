@@ -91,7 +91,7 @@ struct BHRBranchPredictor : public BranchPredictor {
 struct SaturatingBHRBranchPredictor : public BranchPredictor {
     std::vector<std::bitset<2>> bhrTable;
     std::bitset<2> bhr;
-    std::vector<std::bitset<2>> table;
+    std::vector<std::bitset<2>> table; // will store local history corresponding to each pc
     std::vector<std::bitset<2>> combination;
     SaturatingBHRBranchPredictor(int value, int size) : bhrTable(1 << 2, value),bhr(value), table(1 << 14, value), combination(size, value) {
     assert(size <= (1 << 16));
@@ -101,18 +101,21 @@ struct SaturatingBHRBranchPredictor : public BranchPredictor {
     bool predict(uint32_t pc) {
         int size = combination.size();
         // your code here
-        // if predicted strongly not taken or strongly taken by the local branch predictor then follow that 
+        // if local history of a given pc predicted strongly not taken or strongly taken by the local branch predictor then follow that 
         // otherwise look at the global branch predictor if it is strongly taken or not taken then follow it else go to combination table
-        std::bitset<2> locpredict = table[pc %(1<<14)];
-        int loc_predict = static_cast<int> ((locpredict).to_ulong());
-        if (loc_predict==3 || loc_predict==0) return locpredict.test(1);
+        // else or
+        std::bitset<2> lochistory = table[pc %(1<<14)];
+        int loc_his= static_cast<int> ((lochistory).to_ulong());
+
+        int index_combination = (4*(pc %(1<<14)) + loc_his) % size ; 
+        std::bitset<2> combr = combination[index_combination];
+        int lochispr = static_cast<int> (combr.to_ulong());
+        if (lochispr==0 || lochispr==3) return combr.test(1);
         int address = static_cast<int> (bhr.to_ulong()); 
         std::bitset<2> bhrpredict = (bhrTable[address]);
-        int bhrP = static_cast<int> (bhrpredict.to_ulong());
-        if (bhrP==3 || bhrP==0) return bhrpredict.test(1);
-        int index_combination = (4*(pc %(1<<14)) + address) % size ; 
-        std::bitset<2> combr = combination[index_combination];
-        return combr.test(1);
+        int bhrp = static_cast<int> (bhrpredict.to_ulong());
+        if(bhrp==0 || bhrp==3) return bhrpredict.test(1);
+        else return ((~combr | ~bhrpredict)).test(1);
     }
 
 
@@ -120,13 +123,23 @@ struct SaturatingBHRBranchPredictor : public BranchPredictor {
         // your code here
         int size  = combination.size();
         if (taken){
-            std::bitset<2> x = table[pc % (1<<14)];
+            std::bitset<2> loc_his = table[pc % (1<<14)];
+            int lochispr = static_cast<int>(loc_his.to_ulong());
+
+
+            int index_combination = (4*(pc %(1<<14)) + lochispr) % size ; 
+            std::bitset<2> x = combination[index_combination];
             int sum = 2*((int) x.test(1)) + (int) x.test(0);
             int new_sum = sum +1;
             if (new_sum == 4) new_sum = 3;
             x.set(0,(bool) (new_sum %2));
             x.set(1,(bool)(new_sum & 2));
-            table[pc %(1<<14)] = x;
+            combination[index_combination] = x;
+
+            std::bitset<2> y;
+            y.set(1,taken);
+            y.set(0,loc_his.test(1));
+            table[pc %(1 << 14)] = y;
 
             int address = static_cast<int> (bhr.to_ulong()); 
             std::bitset<2> counter = bhrTable[address];
@@ -138,26 +151,27 @@ struct SaturatingBHRBranchPredictor : public BranchPredictor {
             bhrTable[address]=counter;
 
 
-            int index_combination = (4*(pc %(1<<14)) + address) % size ; 
-             x = combination[index_combination];
-            sum = 2*((int) x.test(1)) + (int) x.test(0);
-            new_sum = sum +1;
-            if (new_sum == 4) new_sum = 3;
+
+        }
+        else {
+           std::bitset<2> loc_his = table[pc % (1<<14)];
+            int lochispr = static_cast<int>(loc_his.to_ulong());
+
+
+            int index_combination = (4*(pc %(1<<14)) + lochispr) % size ; 
+            std::bitset<2> x = combination[index_combination];
+            int sum = 2*((int) x.test(1)) + (int) x.test(0);
+            int new_sum ;
+            if (sum==0) new_sum=0;
+            else new_sum = sum -1;
             x.set(0,(bool) (new_sum %2));
             x.set(1,(bool)(new_sum & 2));
             combination[index_combination] = x;
 
-
-        }
-        else {
-        std::bitset<2> x = table[pc % (1<<14)];
-        int new_sum = 0;
-        int sum = 2*((int) x.test(1)) + (int) x.test(0);
-        if ( sum == 0 ) new_sum = 0;
-        else new_sum = sum - 1;
-        x.set(0,(bool) (new_sum %2));
-        x.set(1,(bool)(new_sum & 2));
-        table[pc %(1<<14)] = x;
+            std::bitset<2> y;
+            y.set(1,taken);
+            y.set(0,loc_his.test(1));
+            table[pc %(1 << 14)] = y;
 
 
         int address = static_cast<int> (bhr.to_ulong()); 
@@ -169,15 +183,6 @@ struct SaturatingBHRBranchPredictor : public BranchPredictor {
             counter.set(1,(bool)(new_sum & 2));
             bhrTable[address]=counter;
 
-
-        int index_combination = (4*(pc %(1<<14)) + address) % size ; 
-        x = combination[index_combination];
-        sum = 2*((int) x.test(1)) + (int) x.test(0);
-        if ( sum == 0 ) new_sum = 0;
-        else new_sum = sum - 1;
-        x.set(0,(bool) (new_sum %2));
-        x.set(1,(bool)(new_sum & 2));
-        combination[index_combination] = x;
 
 
 

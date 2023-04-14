@@ -10,7 +10,7 @@ void tester(int x) {
     std::string line;
     struct SaturatingBranchPredictor sbp(x);
     struct BHRBranchPredictor bbp(x);
-    struct SaturatingBHRBranchPredictor sbbp(x,1<<16);
+    struct SaturatingBHRBranchPredictor sbbp(x,1 << 16);
     int sbp_count=0;
     int bbp_count =0;
     int sbbp_count=0;
