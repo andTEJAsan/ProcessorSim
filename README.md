@@ -17,6 +17,7 @@ $ make run_5stage_bypass
 $ make run_79stage
 $ make run_79stage_bypass
 $ make branch
+for testing branch, the input has to be in branchtrace.txt
 to test branch trace accuracies, un comment lines in code if you want to see "taken/ not taken" for each branch trace
 input file has to be in input.asm
 ```
