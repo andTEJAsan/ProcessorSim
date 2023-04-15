@@ -22,12 +22,27 @@ void tester(int x) {
         //std::cout <<std::bitset<32>(pc) << "\n";
         if (line[9]=='1') { taken = true; }
         else {taken =false;}
-        if (taken == sbp.predict(pc)) {sbp_count++; }
+        if (taken == sbp.predict(pc)) {
+        sbp_count++; 
+    //    if(sbp.predict(pc)) {cout <<"SBP Predicts Taken"<<" ";} 
+    //    else {cout <<"SBP Predicts Not Taken"<<" ";}
+        }
         sbp.update(pc,taken);
-        if (taken == bbp.predict(pc)) {bbp_count++; }
+        if (taken == bbp.predict(pc)) {
+        bbp_count++; 
+    //    if(bbp.predict(pc)) {cout <<"BBP Predicts Taken"<<" ";} 
+    //    else {cout <<"BBP Predicts Not Taken"<<" ";}
+        }
         bbp.update(pc,taken);
-        if (taken == sbbp.predict(pc)) {sbbp_count++; }
+        if (taken == sbbp.predict(pc)) {
+        sbbp_count++; 
+    //    if(sbbp.predict(pc)) {cout <<"SBBP Predicts Taken"<<" ";} 
+    //    else {cout <<"SBBP Predicts Not Taken"<<" ";}
+        }
         sbbp.update(pc,taken);
+    //    if (taken){cout<< "| Verdict : Taken\n";}
+    //    else cout <<"| Verdict : Not Taken\n";
+
         count++;
 
 
