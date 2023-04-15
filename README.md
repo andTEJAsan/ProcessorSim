@@ -10,11 +10,13 @@ This code is the starter code for Assignment 2 of the 2023 spring offering of th
 ## Usage
 After cloning the repository, run the following commands to compile and run the sample program:
 ```bash
+make sure the file you want to test on is in input.asm
 $ make compile
 $ make run_5stage
 $ make run_5stage_bypass
 $ make run_79stage
 $ make run_79stage_bypass
-
+$ make branch
+to test branch trace accuracies, un comment lines in code if you want to see "taken/ not taken" for each branch trace
 input file has to be in input.asm
 ```
